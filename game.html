@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glow Buddies</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Quicksand', sans-serif;
+            transition: background-color 0.5s ease;
+        }
+        .grove-element {
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+            -webkit-tap-highlight-color: transparent; /* Removes blue tap highlight on mobile */
+        }
+        .grove-element:hover {
+            transform: scale(1.05);
+        }
+        .playing-sequence .grove-element, .game-over .grove-element {
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        .active-glow {
+            box-shadow: 0 0 25px 10px var(--glow-color, #fff);
+            transform: scale(1.1);
+        }
+        /* Light Theme (Default) */
+        .theme-light {
+            --bg-color: #f0f9ff; /* sky-100 */
+            --text-color: #0c4a6e; /* sky-900 */
+            --message-bg: #e0f2fe; /* sky-200 */
+            --button-bg: #38bdf8; /* sky-400 */
+            --button-hover: #0ea5e9; /* sky-500 */
+            --element-1-bg: #fbbf24; /* amber-400 */
+            --element-1-glow: #f59e0b;
+            --element-2-bg: #4ade80; /* green-400 */
+            --element-2-glow: #22c55e;
+            --element-3-bg: #f472b6; /* pink-400 */
+            --element-3-glow: #ec4899;
+            --element-4-bg: #818cf8; /* indigo-400 */
+            --element-4-glow: #6366f1;
+        }
+        /* High-Contrast / Dark Theme */
+        .theme-dark {
+            --bg-color: #0c1427;
+            --text-color: #e0f2fe;
+            --message-bg: #1e293b;
+            --button-bg: #38bdf8;
+            --button-hover: #7dd3fc;
+            --element-1-bg: #facc15;
+            --element-1-glow: #fde047;
+            --element-2-bg: #86efac;
+            --element-2-glow: #bbf7d0;
+            --element-3-bg: #f9a8d4;
+            --element-3-glow: #fbcfe8;
+            --element-4-bg: #a5b4fc;
+            --element-4-glow: #c7d2fe;
+        }
+        .bg-custom { background-color: var(--bg-color); }
+        .text-custom { color: var(--text-color); }
+        .message-custom-bg { background-color: var(--message-bg); }
+        .button-custom-bg { background-color: var(--button-bg); }
+        .button-custom-hover:hover { background-color: var(--button-hover); }
+    </style>
+</head>
+<body id="body-container" class="theme-light bg-custom text-custom flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-2xl mx-auto p-4 sm:p-6 text-center">
+        <header class="mb-4">
+            <h1 class="text-4xl sm:text-5xl font-bold">Glow Buddies</h1>
+            <p class="mt-2 text-lg">Listen, watch, and repeat the pattern.</p>
+        </header>
+
+        <div id="controls" class="min-h-[80px] flex flex-col items-center justify-center mb-6">
+            <div id="message-box" class="message-custom-bg text-custom p-3 rounded-lg shadow-md text-xl transition-opacity duration-300">
+                Press "Start" to begin.
+            </div>
+            <button id="start-button" class="mt-4 px-8 py-3 button-custom-bg text-white font-bold rounded-full shadow-lg transform hover:scale-105 transition-transform duration-200">
+                Start
+            </button>
+        </div>
+
+        <main id="grove-container" class="grid grid-cols-2 gap-4 sm:gap-6 aspect-square max-w-md mx-auto relative">
+            <div id="sequence-overlay" class="absolute inset-0 z-10 hidden"></div>
+            <div id="element-1" data-id="1" class="grove-element rounded-full" style="background-color: var(--element-1-bg); --glow-color: var(--element-1-glow);"></div>
+            <div id="element-2" data-id="2" class="grove-element rounded-full" style="background-color: var(--element-2-bg); --glow-color: var(--element-2-glow);"></div>
+            <div id="element-3" data-id="3" class="grove-element rounded-full" style="background-color: var(--element-3-bg); --glow-color: var(--element-3-glow);"></div>
+            <div id="element-4" data-id="4" class="grove-element rounded-full" style="background-color: var(--element-4-bg); --glow-color: var(--element-4-glow);"></div>
+        </main>
+
+        <footer class="mt-8">
+            <button id="theme-toggle" class="px-4 py-2 message-custom-bg rounded-lg shadow-md hover:opacity-80 transition-opacity">
+                Toggle High Contrast
+            </button>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const startButton = document.getElementById('start-button');
+            const messageBox = document.getElementById('message-box');
+            const groveContainer = document.getElementById('grove-container');
+            const sequenceOverlay = document.getElementById('sequence-overlay');
+            const themeToggle = document.getElementById('theme-toggle');
+            const bodyContainer = document.getElementById('body-container');
+
+            let sequence = [];
+            let playerSequence = [];
+            let level = 0;
+            let isPlayerTurn = false;
+            let audioReady = false;
+            let synths = [];
+
+            // --- Graceful Audio Initialization ---
+            function setupAudio() {
+                if (typeof Tone !== 'undefined') {
+                    synths = [
+                        new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.5 } }).toDestination(),
+                        new Tone.Synth({ oscillator: { type: 'triangle8' }, envelope: { attack: 0.05, decay: 0.3, sustain: 0.2, release: 0.5 } }).toDestination(),
+                        new Tone.Synth({ oscillator: { type: 'fmtriangle' }, envelope: { attack: 0.02, decay: 0.4, sustain: 0.1, release: 0.3 } }).toDestination(),
+                        new Tone.Synth({ oscillator: { type: 'amwobble' }, envelope: { attack: 0.1, decay: 0.2, sustain: 0.3, release: 0.5 } }).toDestination()
+                    ];
+                    audioReady = true;
+                    console.log("Audio is ready.");
+                } else {
+                    console.warn("Tone.js not found. Game will run without audio.");
+                }
+            }
+            setupAudio();
+
+            const notes = ['C4', 'E4', 'G4', 'B4'];
+
+            // --- Game Logic ---
+            function startGame() {
+                // First, try to enable audio with a user gesture.
+                if (audioReady && Tone.context.state !== 'running') {
+                    Tone.start().catch(e => console.error("Could not start audio context:", e));
+                }
+                
+                // The game starts visually regardless of audio state.
+                level = 0;
+                sequence = [];
+                startButton.classList.add('hidden');
+                groveContainer.classList.remove('game-over');
+                nextLevel();
+            }
+
+            function nextLevel() {
+                isPlayerTurn = false;
+                playerSequence = [];
+                level++;
+                updateMessage(`Level ${level}`);
+                sequence.push(Math.floor(Math.random() * 4) + 1);
+                playSequence();
+            }
+
+            async function playSequence() {
+                sequenceOverlay.classList.remove('hidden');
+                sequenceOverlay.classList.add('playing-sequence');
+                await sleep(700);
+                updateMessage('Watch carefully...');
+                await sleep(500);
+
+                for (const step of sequence) {
+                    await activateElement(step);
+                    await sleep(300);
+                }
+
+                sequenceOverlay.classList.add('hidden');
+                sequenceOverlay.classList.remove('playing-sequence');
+                isPlayerTurn = true;
+                updateMessage('Your turn...');
+            }
+
+            function activateElement(id) {
+                return new Promise(resolve => {
+                    const element = document.querySelector(`[data-id='${id}']`);
+                    const synthIndex = id - 1;
+                    
+                    if (audioReady) {
+                        synths[synthIndex].triggerAttackRelease(notes[synthIndex], '8n');
+                    }
+                    
+                    element.classList.add('active-glow');
+                    setTimeout(() => {
+                        element.classList.remove('active-glow');
+                        resolve();
+                    }, 600);
+                });
+            }
+
+            function handlePlayerInput(e) {
+                if (!isPlayerTurn) return;
+                const clickedId = parseInt(e.target.dataset.id);
+                if (!clickedId) return;
+
+                activateElement(clickedId);
+                playerSequence.push(clickedId);
+
+                const lastIndex = playerSequence.length - 1;
+                if (playerSequence[lastIndex] !== sequence[lastIndex]) {
+                    handleIncorrectSequence();
+                    return;
+                }
+
+                if (playerSequence.length === sequence.length) {
+                    handleCorrectSequence();
+                }
+            }
+            
+            async function handleCorrectSequence() {
+                isPlayerTurn = false;
+                updateMessage('Well done!');
+                await sleep(1000);
+                nextLevel();
+            }
+
+            async function handleIncorrectSequence() {
+                isPlayerTurn = false;
+                updateMessage('Oops! Let\'s try that again.');
+                groveContainer.classList.add('game-over');
+                await sleep(1500);
+                playerSequence = [];
+                playSequence();
+            }
+            
+            function updateMessage(text) {
+                messageBox.textContent = text;
+            }
+
+            function sleep(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+
+            // --- Event Listeners ---
+            startButton.addEventListener('click', startGame);
+            groveContainer.addEventListener('click', handlePlayerInput);
+            themeToggle.addEventListener('click', () => {
+                bodyContainer.classList.toggle('theme-light');
+                bodyContainer.classList.toggle('theme-dark');
+            });
+        });
+    </script>
+</body>
+</html>
