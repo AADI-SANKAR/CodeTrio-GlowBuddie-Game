@@ -146,7 +146,7 @@
         return str.replace(/(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g, '');
       }
       
-      // --- UPDATED: Speak function now returns a Promise that resolves when speech ends ---
+     
       function speak(text) {
         return new Promise(resolve => {
             if (!'speechSynthesis' in window || !soundOn) {
@@ -160,11 +160,11 @@
             utterance.pitch = 1.2;
             utterance.volume = 1;
 
-            // Resolve the promise when the utterance finishes speaking
+            
             utterance.onend = () => {
                 resolve();
             };
-            // Also resolve on error to prevent the game from freezing
+            
             utterance.onerror = () => {
                 resolve();
             };
@@ -193,10 +193,10 @@
         loadVoice();
       }
 
-      // --- UPDATED: updateMessage now takes optional spoken text and is async ---
+      
       async function updateMessage(displayText, spokenText) {
         messageBox.textContent = displayText;
-        // If spokenText isn't provided, it defaults to the displayText
+       
         await speak(spokenText || displayText);
       }
 
@@ -226,18 +226,18 @@
         await nextLevel();
       }
 
-      // --- UPDATED: nextLevel is now async and calls the new updateMessage ---
+      
       async function nextLevel() {
         isPlayerTurn = false;
         playerSequence = [];
         level++;
-        // Displays level and tries, but only speaks the level number
+        
         await updateMessage(`Level ${level} | Tries: ${triesLeft}`, `Level ${level}`);
         sequence.push(Math.floor(Math.random() * 4) + 1);
         playSequence();
       }
 
-      // --- UPDATED: playSequence is now async and awaits messages ---
+      
       async function playSequence() {
         sequenceOverlay.classList.remove('hidden');
         groveContainer.classList.add('playing-sequence');
@@ -299,7 +299,7 @@
         await nextLevel();
       }
 
-      // --- UPDATED: Incorrect sequence logic now announces tries left ---
+      
       async function handleIncorrectSequence() {
         isPlayerTurn = false;
         triesLeft--;
@@ -330,7 +330,7 @@
         groveContainer.classList.remove('game-over');
       }
 
-      // Buttons
+     
       startButton.addEventListener('click', startGame);
       resetButton.addEventListener('click', resetGame);
       groveContainer.addEventListener('click', handlePlayerInput);
